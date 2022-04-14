@@ -7,6 +7,11 @@ app = Flask(__name__)
 
 client = Client(config.API_KEY, config.API_SECRET)
 
+def get_price_precision(price, precision):
+    format = "{:0.0{}f}".format(price, precision)
+    p_price = float(format)
+    return p_price
+
 def order(side, position, quantity, symbol, order_type, tp, sl):
     try:
         # Close all open orders
@@ -39,24 +44,37 @@ def webhook():
             "message": "Nice try, invalid passphrase"
         }
 
+    pricePrecision = 0
+    qtyPrecision = 0
+    
+    info = client.futures_exchange_info()
+
+    for x in info['symbols']:
+        if x['symbol'] == data['ticker']:
+            pricePrecision = x['pricePrecision']
+            qtyPrecision = x['quantityPrecision']
+
+    #if info['symbols'][0]['pair'] == data['ticker']:
+    #    pricePrecision = info['symbols'][0]['pricePrecision']
+
     if data['order_comment'] == 'L':
         side = 'BUY'
         position = 'SELL'
 
         tp_price = data['order_price'] * (1 + config.TP)
-        tp = round(tp_price,2)
+        tp = get_price_precision(tp_price, pricePrecision)
 
         sl_price = data['order_price'] * (1 - config.SL)
-        sl = round(sl_price,2)
+        sl = get_price_precision(sl_price, pricePrecision)
     elif data['order_comment'] == 'S':
         side = 'SELL'
         position = 'BUY'
 
         tp_price = data['order_price'] * (1 - config.TP)
-        tp = round(tp_price,2)
+        tp = get_price_precision(tp_price, pricePrecision)
 
         sl_price = data['order_price'] * (1 + config.SL)
-        sl = round(sl_price,2)
+        sl = get_price_precision(sl_price, pricePrecision)
     else:
         return {
             "code": "wait",
@@ -70,18 +88,12 @@ def webhook():
             account_balance = float(item['balance'])
             break
 
-    pricePrecision = 0
     f_quantity = 0
 
     balance_to_use = account_balance * config.PERCENT_AMOUNT
     quantity = balance_to_use * config.LEVERAGE / data['order_price']
-
-    info = client.futures_exchange_info()
-
-    if info['symbols'][0]['pair'] == data['ticker']:
-        pricePrecision = info['symbols'][0]['pricePrecision']
     
-    f_quantity = "{:0.0{}f}".format(quantity, pricePrecision)
+    f_quantity = get_price_precision(quantity, qtyPrecision)
 
     order_response = order(side, position, f_quantity, data['ticker'], FUTURE_ORDER_TYPE_MARKET, tp, sl)
 

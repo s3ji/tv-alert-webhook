@@ -9,6 +9,9 @@ client = Client(config.API_KEY, config.API_SECRET)
 
 def order(side, position, quantity, symbol, order_type, tp, sl):
     try:
+        # Close all open orders
+        client.futures_cancel_all_open_orders(symbol=symbol)
+
         order = client.futures_create_order(symbol=symbol, side=side, type=order_type, quantity=quantity)
         
         # Place a TP
@@ -70,7 +73,8 @@ def webhook():
     pricePrecision = 0
     f_quantity = 0
 
-    quantity = config.LEVERAGE * config.ORDER_SIZE * account_balance / data['order_price']
+    balance_to_use = account_balance * config.PERCENT_AMOUNT
+    quantity = balance_to_use * config.LEVERAGE / data['order_price']
 
     info = client.futures_exchange_info()
 

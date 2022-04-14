@@ -44,17 +44,28 @@ def webhook():
             "message": "Nice try, invalid passphrase"
         }
 
+    symbol = data['ticker']
+    ticker = symbol.replace("PERP", "")
+
+    isValidSymbol = False
     pricePrecision = 0
     qtyPrecision = 0
     
     info = client.futures_exchange_info()
 
     for x in info['symbols']:
-        if x['symbol'] == data['ticker']:
+        if x['symbol'] == ticker:
+            isValidSymbol = True
             pricePrecision = x['pricePrecision']
             qtyPrecision = x['quantityPrecision']
 
-    #if info['symbols'][0]['pair'] == data['ticker']:
+    if isValidSymbol == False:
+        return {
+            "code": "invalid_symbol",
+            "message": "symbol is not valid"
+        }
+
+    #if info['symbols'][0]['pair'] == ticker:
     #    pricePrecision = info['symbols'][0]['pricePrecision']
 
     if data['order_comment'] == 'L':
@@ -95,7 +106,7 @@ def webhook():
     
     f_quantity = get_price_precision(quantity, qtyPrecision)
 
-    order_response = order(side, position, f_quantity, data['ticker'], FUTURE_ORDER_TYPE_MARKET, tp, sl)
+    order_response = order(side, position, f_quantity, ticker, FUTURE_ORDER_TYPE_MARKET, tp, sl)
 
     if order_response:
         return {

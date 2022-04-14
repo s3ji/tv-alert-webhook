@@ -28,32 +28,13 @@ def welcome():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    account_balance = 0
-    account_balance_info = client.futures_account_balance()
-    for item in account_balance_info:
-        if item['asset'] == 'USDT':
-            account_balance = float(item['balance'])
-            break
-
     data = json.loads(request.data)
 
-    pricePrecision = 0
-    f_quantity = 0
-    
     if data['passphrase'] != config.WEBHOOK_PASSPHRASE:
         return {
             "code": "error",
             "message": "Nice try, invalid passphrase"
         }
-
-    quantity = config.LEVERAGE * config.ORDER_SIZE * account_balance / data['order_price']
-
-    info = client.futures_exchange_info()
-
-    if info['symbols'][0]['pair'] == data['ticker']:
-        pricePrecision = info['symbols'][0]['pricePrecision']
-    
-    f_quantity = "{:0.0{}f}".format(quantity, pricePrecision)
 
     if data['order_comment'] == 'L':
         side = 'BUY'
@@ -73,6 +54,30 @@ def webhook():
 
         sl_price = data['order_price'] + (data['order_price'] * config.SL)
         sl = round(sl_price,2)
+    else:
+        return {
+            "code": "wait",
+            "message": "waiting for buy/sell signal"
+        }
+
+    account_balance = 0
+    account_balance_info = client.futures_account_balance()
+    for item in account_balance_info:
+        if item['asset'] == 'USDT':
+            account_balance = float(item['balance'])
+            break
+
+    pricePrecision = 0
+    f_quantity = 0
+
+    quantity = config.LEVERAGE * config.ORDER_SIZE * account_balance / data['order_price']
+
+    info = client.futures_exchange_info()
+
+    if info['symbols'][0]['pair'] == data['ticker']:
+        pricePrecision = info['symbols'][0]['pricePrecision']
+    
+    f_quantity = "{:0.0{}f}".format(quantity, pricePrecision)
 
     order_response = order(side, position, f_quantity, data['ticker'], FUTURE_ORDER_TYPE_MARKET, tp, sl)
 

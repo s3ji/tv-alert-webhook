@@ -12,18 +12,13 @@ def get_price_precision(price, precision):
     p_price = float(format)
     return p_price
 
-def order(side, position, quantity, symbol, order_type, tp, sl):
+def order(side, quantity, symbol, order_type):
     try:
         # Close all open orders
         client.futures_cancel_all_open_orders(symbol=symbol)
 
+        # Create market order
         order = client.futures_create_order(symbol=symbol, side=side, type=order_type, quantity=quantity)
-        
-        # Place a TP
-        client.futures_create_order(symbol=symbol, side=position, type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET, stopPrice=tp, closePosition=True, timeInForce='GTE_GTC', workingType='MARK_PRICE', priceProtect=True)
-
-        # Place an SL
-        client.futures_create_order(symbol=symbol, side=position, type=FUTURE_ORDER_TYPE_STOP_MARKET, stopPrice=sl, closePosition=True, timeInForce='GTE_GTC', workingType='MARK_PRICE', priceProtect=True)
     except Exception as e:
         print("an exception occured - {}".format(e))
         return False
@@ -106,9 +101,15 @@ def webhook():
     
     f_quantity = get_price_precision(quantity, qtyPrecision)
 
-    order_response = order(side, position, f_quantity, ticker, FUTURE_ORDER_TYPE_MARKET, tp, sl)
+    order_response = order(side, f_quantity, ticker, FUTURE_ORDER_TYPE_MARKET)
 
     if order_response:
+        # Place a TP
+        client.futures_create_order(symbol=ticker, side=position, type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET, stopPrice=tp, closePosition=True, timeInForce='GTE_GTC', workingType='MARK_PRICE', priceProtect=True)
+
+        # Place an SL
+        client.futures_create_order(symbol=ticker, side=position, type=FUTURE_ORDER_TYPE_STOP_MARKET, stopPrice=sl, closePosition=True, timeInForce='GTE_GTC', workingType='MARK_PRICE', priceProtect=True)
+
         return {
             "code": "success",
             "message": "order executed"

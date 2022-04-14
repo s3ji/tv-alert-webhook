@@ -43,19 +43,19 @@ def webhook():
         side = 'BUY'
         position = 'SELL'
 
-        tp_price = data['order_price'] + (data['order_price'] * config.TP)
+        tp_price = data['order_price'] * (1 + config.TP)
         tp = round(tp_price,2)
 
-        sl_price = data['order_price'] - (data['order_price'] * config.SL)
+        sl_price = data['order_price'] * (1 - config.SL)
         sl = round(sl_price,2)
     elif data['order_comment'] == 'S':
         side = 'SELL'
         position = 'BUY'
 
-        tp_price = data['order_price'] - (data['order_price'] * config.TP)
+        tp_price = data['order_price'] * (1 - config.TP)
         tp = round(tp_price,2)
 
-        sl_price = data['order_price'] + (data['order_price'] * config.SL)
+        sl_price = data['order_price'] * (1 + config.SL)
         sl = round(sl_price,2)
     else:
         return {

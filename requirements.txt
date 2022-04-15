@@ -2,3 +2,4 @@ flask
 gunicorn
 python_binance
 python-dotenv
+discord-webhook

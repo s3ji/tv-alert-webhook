@@ -3,6 +3,34 @@ import json
 from flask import Flask, request, jsonify, render_template
 from binance.client import Client
 from binance.enums import *
+from discord_webhook import DiscordWebhook, DiscordEmbed
+
+def send_discord_message(title, message):
+    if os.environ.get("DISCORD_WEBHOOK"):
+        webhook = DiscordWebhook(url=os.environ.get("DISCORD_WEBHOOK"))
+
+        # create embed object for webhook
+        # you can set the color as a decimal (color=242424) or hex (color='03b2f8') number
+        embed = DiscordEmbed(title=title, description=message, color='03b2f8')
+
+        # add embed object to webhook
+        webhook.add_embed(embed)
+        webhook.execute()
+    else:
+        return False
+
+def check_required_env():
+    REQUIRED_ENV_VARS = ["ENVIRONMENT", "ENABLE_TRADE", "WEBHOOK_PASSPHRASE", "API_KEY", "API_SECRET", "PERCENT_AMOUNT", "LEVERAGE", "MARGIN_TYPE", "TP", "SL"]
+
+    for var in REQUIRED_ENV_VARS:
+        if var not in os.environ:
+            send_discord_message("Environment Error", "Failed because {} is not set.".format(var))
+            raise EnvironmentError("Failed because {} is not set.".format(var))
+        if not os.environ.get(var):
+            send_discord_message("Environment Error", "Failed because {} is empty.".format(var))
+            raise EnvironmentError("Failed because {} is empty.".format(var))
+
+check_required_env()
 
 if os.environ.get("ENVIRONMENT") == 'LOCAL':
     from dotenv import load_dotenv
@@ -14,11 +42,11 @@ ENABLE_TRADE = os.environ.get('ENABLE_TRADE', 'no')
 WEBHOOK_PASSPHRASE = os.environ.get('WEBHOOK_PASSPHRASE')
 API_KEY = os.environ.get('API_KEY')
 API_SECRET = os.environ.get('API_SECRET')
-PERCENT_AMOUNT = float(os.environ.get('PERCENT_AMOUNT'))
+PERCENT_AMOUNT = os.environ.get('PERCENT_AMOUNT')
 LEVERAGE = os.environ.get('LEVERAGE')
 MARGIN_TYPE = os.environ.get('MARGIN_TYPE')
-TP = float(os.environ.get('TP'))
-SL = float(os.environ.get('SL'))
+TP = os.environ.get('TP')
+SL = os.environ.get('SL')
 
 client = Client(API_KEY, API_SECRET)
 
@@ -27,7 +55,7 @@ def change_leverage(symbol, leverage, margin_type):
         client.futures_change_leverage(symbol=symbol, leverage=leverage)
         client.futures_change_margin_type(symbol=symbol, marginType=margin_type)
     except Exception as e:
-        print(f"Symbol: {symbol}, error: {e}")
+        send_discord_message("Error in Change Leverage/Margin Type", f"Symbol: {symbol}, error: {e}")
 
 def get_price_precision(price, precision):
     format = "{:0.0{}f}".format(price, precision)
@@ -41,8 +69,10 @@ def order(side, quantity, symbol, order_type):
 
         # Create market order
         order = client.futures_create_order(symbol=symbol, side=side, type=order_type, quantity=quantity)
+
+        send_discord_message("Order executed", f"{side} - {symbol} - {quantity} - {LEVERAGE}")
     except Exception as e:
-        print("an exception occured - {}".format(e))
+        send_discord_message("Order Failed", "An exception occured - {}".format(e))
         return False
 
     return order
@@ -54,6 +84,7 @@ def welcome():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if ENABLE_TRADE == 'no':
+        send_discord_message("Error", "Trading is not enabled.")
         return {
             "code": "error",
             "message": "trading is not enabled"
@@ -62,6 +93,7 @@ def webhook():
     data = json.loads(request.data)
 
     if data['passphrase'] != WEBHOOK_PASSPHRASE:
+        send_discord_message("Error", "Invalid passphrase.")
         return {
             "code": "error",
             "message": "Nice try, invalid passphrase"
@@ -83,6 +115,7 @@ def webhook():
             qtyPrecision = x['quantityPrecision']
 
     if isValidSymbol == False:
+        send_discord_message("Error", "Invalid symbol - {}".format(ticker))
         return {
             "code": "invalid_symbol",
             "message": "symbol is not valid"
@@ -104,21 +137,22 @@ def webhook():
         side = 'BUY'
         position = 'SELL'
 
-        tp_price = data['order_price'] * (1 + TP)
+        tp_price = float(data['order_price']) * (1 + float(TP))
         tp = get_price_precision(tp_price, pricePrecision)
 
-        sl_price = data['order_price'] * (1 - SL)
+        sl_price = float(data['order_price']) * (1 - float(SL))
         sl = get_price_precision(sl_price, pricePrecision)
     elif data['order_comment'] == 'S':
         side = 'SELL'
         position = 'BUY'
 
-        tp_price = data['order_price'] * (1 - TP)
+        tp_price = float(data['order_price']) * (1 - float(TP))
         tp = get_price_precision(tp_price, pricePrecision)
 
-        sl_price = data['order_price'] * (1 + SL)
+        sl_price = float(data['order_price']) * (1 + float(SL))
         sl = get_price_precision(sl_price, pricePrecision)
     else:
+        send_discord_message("Error", "Waiting for buy/sell signal")
         return {
             "code": "wait",
             "message": "waiting for buy/sell signal"
@@ -126,8 +160,8 @@ def webhook():
 
     f_quantity = 0
 
-    balance_to_use = account_balance * PERCENT_AMOUNT
-    quantity = balance_to_use * LEVERAGE / data['order_price']
+    balance_to_use = float(account_balance) * float(PERCENT_AMOUNT)
+    quantity = float(balance_to_use) * float(LEVERAGE) / float(data['order_price'])
     
     f_quantity = get_price_precision(quantity, qtyPrecision)
 

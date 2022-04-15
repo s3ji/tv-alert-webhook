@@ -1,11 +1,33 @@
-import json, config
+import os
+import json
+#from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 from binance.client import Client
 from binance.enums import *
 
+#load_dotenv()
+
 app = Flask(__name__)
 
-client = Client(config.API_KEY, config.API_SECRET)
+WEBHOOK_PASSPHRASE = os.environ.get('WEBHOOK_PASSPHRASE')
+
+API_KEY = os.environ.get('API_KEY')
+API_SECRET = os.environ.get('API_SECRET')
+
+PERCENT_AMOUNT = float(os.environ.get('PERCENT_AMOUNT'))
+LEVERAGE = os.environ.get('LEVERAGE')
+MARGIN_TYPE = os.environ.get('MARGIN_TYPE')
+TP = float(os.environ.get('TP'))
+SL = float(os.environ.get('SL'))
+
+client = Client(API_KEY, API_SECRET)
+
+def change_leverage(symbol, leverage, margin_type):
+    try:
+        client.futures_change_leverage(symbol=symbol, leverage=leverage)
+        client.futures_change_margin_type(symbol=symbol, marginType=margin_type)
+    except Exception as e:
+        print(f"Symbol: {symbol}, error: {e}")
 
 def get_price_precision(price, precision):
     format = "{:0.0{}f}".format(price, precision)
@@ -33,7 +55,7 @@ def welcome():
 def webhook():
     data = json.loads(request.data)
 
-    if data['passphrase'] != config.WEBHOOK_PASSPHRASE:
+    if data['passphrase'] != WEBHOOK_PASSPHRASE:
         return {
             "code": "error",
             "message": "Nice try, invalid passphrase"
@@ -60,32 +82,10 @@ def webhook():
             "message": "symbol is not valid"
         }
 
+    change_leverage(ticker, LEVERAGE, MARGIN_TYPE)
+
     #if info['symbols'][0]['pair'] == ticker:
     #    pricePrecision = info['symbols'][0]['pricePrecision']
-
-    if data['order_comment'] == 'L':
-        side = 'BUY'
-        position = 'SELL'
-
-        tp_price = data['order_price'] * (1 + config.TP)
-        tp = get_price_precision(tp_price, pricePrecision)
-
-        sl_price = data['order_price'] * (1 - config.SL)
-        sl = get_price_precision(sl_price, pricePrecision)
-    elif data['order_comment'] == 'S':
-        side = 'SELL'
-        position = 'BUY'
-
-        tp_price = data['order_price'] * (1 - config.TP)
-        tp = get_price_precision(tp_price, pricePrecision)
-
-        sl_price = data['order_price'] * (1 + config.SL)
-        sl = get_price_precision(sl_price, pricePrecision)
-    else:
-        return {
-            "code": "wait",
-            "message": "waiting for buy/sell signal"
-        }
 
     account_balance = 0
     account_balance_info = client.futures_account_balance()
@@ -94,10 +94,34 @@ def webhook():
             account_balance = float(item['balance'])
             break
 
+    if data['order_comment'] == 'L':
+        side = 'BUY'
+        position = 'SELL'
+
+        tp_price = data['order_price'] * (1 + TP)
+        tp = get_price_precision(tp_price, pricePrecision)
+
+        sl_price = data['order_price'] * (1 - SL)
+        sl = get_price_precision(sl_price, pricePrecision)
+    elif data['order_comment'] == 'S':
+        side = 'SELL'
+        position = 'BUY'
+
+        tp_price = data['order_price'] * (1 - TP)
+        tp = get_price_precision(tp_price, pricePrecision)
+
+        sl_price = data['order_price'] * (1 + SL)
+        sl = get_price_precision(sl_price, pricePrecision)
+    else:
+        return {
+            "code": "wait",
+            "message": "waiting for buy/sell signal"
+        }
+
     f_quantity = 0
 
-    balance_to_use = account_balance * config.PERCENT_AMOUNT
-    quantity = balance_to_use * config.LEVERAGE / data['order_price']
+    balance_to_use = account_balance * PERCENT_AMOUNT
+    quantity = balance_to_use * LEVERAGE / data['order_price']
     
     f_quantity = get_price_precision(quantity, qtyPrecision)
 

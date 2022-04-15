@@ -170,8 +170,8 @@ def webhook():
         tp_price = float(data['order_price']) * (float(TP) / float(LEVERAGE) + 1)
         tp = get_price_precision(tp_price, pricePrecision)
 
-        # LONG SL calculation = ENTRY_PRICE * (TP% / LEVERAGE - 1)
-        sl_price = float(data['order_price']) * (float(SL) / float(LEVERAGE) - 1)
+        # LONG SL calculation = ENTRY_PRICE * (1 - SL% / LEVERAGE)
+        sl_price = float(data['order_price']) * (1 - float(SL) / float(LEVERAGE))
         sl = get_price_precision(sl_price, pricePrecision)
     elif data['order_comment'] == 'S':
         side = 'SELL'
@@ -181,7 +181,7 @@ def webhook():
         tp_price = float(data['order_price']) * (1 - float(TP) / float(LEVERAGE))
         tp = get_price_precision(tp_price, pricePrecision)
 
-        # SHORT SL calculation = ENTRY_PRICE * (1 + TP% / LEVERAGE)
+        # SHORT SL calculation = ENTRY_PRICE * (1 + SL% / LEVERAGE)
         sl_price = float(data['order_price']) * (1 + float(SL) / float(LEVERAGE))
         sl = get_price_precision(sl_price, pricePrecision)
     else:

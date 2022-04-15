@@ -20,7 +20,7 @@ def send_discord_message(title, message):
         return False
 
 def check_required_env():
-    REQUIRED_ENV_VARS = ["ENVIRONMENT", "ENABLE_TRADE", "WEBHOOK_PASSPHRASE", "API_KEY", "API_SECRET", "PERCENT_AMOUNT", "LEVERAGE", "MARGIN_TYPE", "TP", "SL"]
+    REQUIRED_ENV_VARS = ["ENVIRONMENT", "ENABLE_TRADE", "WEBHOOK_PASSPHRASE", "API_KEY", "API_SECRET", "PERCENT_AMOUNT", "MAX_MARGIN", "MAX_ORDERS", "LEVERAGE", "MARGIN_TYPE", "TP", "SL"]
 
     for var in REQUIRED_ENV_VARS:
         if var not in os.environ:
@@ -43,6 +43,8 @@ WEBHOOK_PASSPHRASE = os.environ.get('WEBHOOK_PASSPHRASE')
 API_KEY = os.environ.get('API_KEY')
 API_SECRET = os.environ.get('API_SECRET')
 PERCENT_AMOUNT = os.environ.get('PERCENT_AMOUNT')
+MAX_MARGIN = os.environ.get('MAX_MARGIN')
+MAX_ORDERS = os.environ.get('MAX_ORDERS')
 LEVERAGE = os.environ.get('LEVERAGE')
 MARGIN_TYPE = os.environ.get('MARGIN_TYPE')
 TP = os.environ.get('TP')
@@ -55,8 +57,7 @@ def change_leverage(symbol, leverage, margin_type):
         client.futures_change_leverage(symbol=symbol, leverage=leverage)
         client.futures_change_margin_type(symbol=symbol, marginType=margin_type)
     except Exception as e:
-        if e != 'APIError(code=-4046): No need to change margin type.':
-            send_discord_message("Error in Change Leverage/Margin Type", f"Symbol: {symbol}, error: {e}")
+        print("Error in Change Leverage/Margin Type")
 
 def get_price_precision(price, precision):
     format = "{:0.0{}f}".format(price, precision)
@@ -71,7 +72,7 @@ def order(side, quantity, symbol, order_type):
         # Create market order
         order = client.futures_create_order(symbol=symbol, side=side, type=order_type, quantity=quantity)
 
-        send_discord_message("Order executed", f"{side} - {symbol} - {quantity} - {LEVERAGE}")
+        send_discord_message("Order executed", f"{side} - {LEVERAGE}x - {symbol}")
     except Exception as e:
         send_discord_message("Order Failed", "An exception occured - {}".format(e))
         return False
@@ -122,14 +123,44 @@ def webhook():
             "message": "symbol is not valid"
         }
 
-    change_leverage(ticker, LEVERAGE, MARGIN_TYPE)
-
     account_balance = 0
     account_balance_info = client.futures_account_balance()
     for item in account_balance_info:
         if item['asset'] == 'USDT':
             account_balance = float(item['balance'])
             break
+
+    account_info = client.futures_account()['positions']
+    total_margin_used = 0
+    open_orders = 0
+    used_margin = 0
+    for item in account_info:
+        used_margin = float(item['positionInitialMargin'])
+        if used_margin == 0.0:
+            continue
+        else:
+            open_orders += 1
+            total_margin_used += used_margin
+    
+    percent_margin_used = round( (float(total_margin_used) / float(account_balance)) * 100, 2 )
+    percent_max_margin = float(MAX_MARGIN)
+    max_orders_count = int(MAX_ORDERS)
+
+    if percent_margin_used >= percent_max_margin:
+        send_discord_message("Error", "Maximum margin")
+        return {
+            "code": "error",
+            "message": "max margin"
+        }
+
+    if open_orders >= max_orders_count:
+        send_discord_message("Error", "Maximum open orders")
+        return {
+            "code": "error",
+            "message": "max open orders"
+        }
+
+    change_leverage(ticker, LEVERAGE, MARGIN_TYPE)
 
     if data['order_comment'] == 'L':
         side = 'BUY'
@@ -150,7 +181,6 @@ def webhook():
         sl_price = float(data['order_price']) * (1 + float(SL))
         sl = get_price_precision(sl_price, pricePrecision)
     else:
-        send_discord_message("Error", "Waiting for buy/sell signal")
         return {
             "code": "wait",
             "message": "waiting for buy/sell signal"

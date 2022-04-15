@@ -55,7 +55,8 @@ def change_leverage(symbol, leverage, margin_type):
         client.futures_change_leverage(symbol=symbol, leverage=leverage)
         client.futures_change_margin_type(symbol=symbol, marginType=margin_type)
     except Exception as e:
-        send_discord_message("Error in Change Leverage/Margin Type", f"Symbol: {symbol}, error: {e}")
+        if e != 'APIError(code=-4046): No need to change margin type.':
+            send_discord_message("Error in Change Leverage/Margin Type", f"Symbol: {symbol}, error: {e}")
 
 def get_price_precision(price, precision):
     format = "{:0.0{}f}".format(price, precision)
@@ -122,9 +123,6 @@ def webhook():
         }
 
     change_leverage(ticker, LEVERAGE, MARGIN_TYPE)
-
-    #if info['symbols'][0]['pair'] == ticker:
-    #    pricePrecision = info['symbols'][0]['pricePrecision']
 
     account_balance = 0
     account_balance_info = client.futures_account_balance()

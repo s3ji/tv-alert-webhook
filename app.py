@@ -1,19 +1,18 @@
 import os
 import json
-#from dotenv import load_dotenv
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 from binance.client import Client
 from binance.enums import *
 
-#load_dotenv()
+load_dotenv()
 
 app = Flask(__name__)
 
+ENABLE_TRADE = os.environ.get('ENABLE_TRADE', 'no')
 WEBHOOK_PASSPHRASE = os.environ.get('WEBHOOK_PASSPHRASE')
-
 API_KEY = os.environ.get('API_KEY')
 API_SECRET = os.environ.get('API_SECRET')
-
 PERCENT_AMOUNT = float(os.environ.get('PERCENT_AMOUNT'))
 LEVERAGE = os.environ.get('LEVERAGE')
 MARGIN_TYPE = os.environ.get('MARGIN_TYPE')
@@ -53,6 +52,12 @@ def welcome():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
+    if ENABLE_TRADE == 'no':
+        return {
+            "code": "error",
+            "message": "trading is not enabled"
+        }
+
     data = json.loads(request.data)
 
     if data['passphrase'] != WEBHOOK_PASSPHRASE:

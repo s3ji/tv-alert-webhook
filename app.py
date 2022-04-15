@@ -1,11 +1,11 @@
 import os
 import json
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 from binance.client import Client
 from binance.enums import *
 
-load_dotenv()
+#load_dotenv()
 
 app = Flask(__name__)
 
